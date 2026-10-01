@@ -1,13 +1,16 @@
 """FastAPI surface for the hardware-free mission prototype."""
 
 from .drone import DroneProfile
-from .models import Coordinate, Mission
+from .models import Coordinate, Mission, MissionState
 from .reports import mission_report
 from .route_manager import export_geojson
 from .routes import geojson_route, polygon_survey, recorded_track
 from .simulator import SimulatedMissionExecutor
 from .storage import MissionRepository
 from .validator import MissionValidator
+from .environmental import AnalysisType, EnvironmentalReading, EnvironmentalStore
+from .payments import SimulatedUsdcProvider
+from .provenance import SimulatedSolanaProofProvider
 
 
 def create_app(database: str = "monitoramento.db"):
@@ -20,6 +23,9 @@ def create_app(database: str = "monitoramento.db"):
     repository = MissionRepository(database)
     missions: dict[str, Mission] = {}
     executors: dict[str, SimulatedMissionExecutor] = {}
+    environmental = EnvironmentalStore()
+    proof_provider = SimulatedSolanaProofProvider()
+    payment_provider = SimulatedUsdcProvider()
 
     def mission_from_payload(payload: dict) -> tuple[Mission, DroneProfile]:
         base = Coordinate(**payload["base"])
@@ -59,7 +65,15 @@ def create_app(database: str = "monitoramento.db"):
     def validate_mission(mission_id: str):
         mission = get_mission(mission_id)
         executor = executors[mission_id]
-        return MissionValidator(executor.drone).validate(mission).__dict__
+        result = MissionValidator(executor.drone).validate(mission)
+        return {
+            "valid": result.valid,
+            "route_length_m": result.route_length_m,
+            "farthest_distance_m": result.farthest_distance_m,
+            "return_trigger_percent": result.return_trigger_percent,
+            "errors": [issue.__dict__ for issue in result.errors],
+            "warnings": [issue.__dict__ for issue in result.warnings],
+        }
 
     @app.post("/missions/{mission_id}/start")
     def start_mission(mission_id: str):
@@ -89,7 +103,7 @@ def create_app(database: str = "monitoramento.db"):
     @app.post("/missions/{mission_id}/return")
     def return_mission(mission_id: str):
         mission = get_mission(mission_id)
-        mission.state = mission.state.RETURNING
+        mission.state = MissionState.RETURNING
         return mission.to_dict()
 
     @app.get("/missions/{mission_id}/telemetry")
@@ -124,5 +138,28 @@ def create_app(database: str = "monitoramento.db"):
     def report(mission_id: str):
         executor = executors[mission_id]
         return mission_report(executor.mission, tuple(executor.events), executor.battery_percent)
+
+    @app.post("/nodes/readings")
+    def ingest_reading(payload: dict):
+        try:
+            reading = EnvironmentalReading.now(payload["node_id"], payload["latitude"], payload["longitude"], payload["data_type"], payload.get("measurements", {}), payload.get("metadata", {}))
+            environmental.ingest(reading)
+            return reading.to_dict()
+        except (KeyError, TypeError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.get("/nodes/readings")
+    def list_readings():
+        return [reading.to_dict() for reading in environmental.readings]
+
+    @app.post("/analyses")
+    def create_analysis(payload: dict):
+        try:
+            result = environmental.analyze(AnalysisType(payload["analysis"]), payload.get("node_ids"))
+            proof = proof_provider.register(result)
+            payment = payment_provider.charge(float(payload.get("amount_usdc", 0.01)))
+            return {"result": result, "proof": proof.to_dict(), "payment": payment.__dict__}
+        except (KeyError, TypeError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     return app

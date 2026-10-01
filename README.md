@@ -188,6 +188,17 @@ pip install -e ".[dev]"
 python -m monitoramento.cli --demo
 ```
 
+## Local API and dashboard
+
+Install the optional web dependencies and start the simulation API:
+
+```powershell
+pip install -e ".[web]"
+uvicorn monitoramento.main:app --reload
+```
+
+The API exposes mission creation, validation, simulation control, telemetry, events, reports, GeoJSON route generation, environmental readings, analysis, simulated Solana provenance, and simulated USDC payments. The lightweight dashboard is in `dashboard/index.html` and intentionally focuses on a navigation-chart view instead of a decorative interface.
+
 The simulator does not connect to a real aircraft. Physical flight operation must keep the flight controller responsible for stabilization, navigation, and safety procedures.
 
 ## Project positioning
