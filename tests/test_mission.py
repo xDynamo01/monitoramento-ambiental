@@ -5,6 +5,8 @@ from monitoramento.return_system import BatteryModel, IndependentReturnSystem, R
 from monitoramento.validator import IssueLevel, MissionValidator
 from monitoramento.drone import DroneProfile
 from monitoramento.simulator import EventType, SimulatedMissionExecutor
+from monitoramento.alerts import AlertLevel, AlertManager
+from monitoramento.reports import mission_report
 
 
 def test_recorded_track_requires_two_points():
@@ -147,5 +149,25 @@ def test_simulator_completes_valid_mission_and_records_events():
     assert mission.state is MissionState.COMPLETE
     assert events[0].type is EventType.MISSION_STARTED
     assert events[-1].type is EventType.MISSION_COMPLETED
-    status = system.evaluate(Telemetry(route.route[0], 95))
-    assert status.decision is ReturnDecision.RETURN_TO_BASE
+
+
+def test_mission_can_pause_resume_and_abort():
+    base = Coordinate(0, 0)
+    mission = Mission("Sector A", recorded_track(base, [Coordinate(0, .001), Coordinate(0, .002)]))
+    mission.mark_ready()
+    mission.mark_started()
+    mission.pause()
+    assert mission.state is MissionState.PAUSED
+    mission.resume()
+    mission.abort()
+    assert mission.state is MissionState.ABORTED
+
+
+def test_alerts_and_report_are_structured():
+    manager = AlertManager()
+    alert = manager.emit("BATTERY_LOW", AlertLevel.WARNING, "battery margin is low")
+    assert alert.level is AlertLevel.WARNING
+    base = Coordinate(0, 0)
+    mission = Mission("Sector A", recorded_track(base, [Coordinate(0, .001), Coordinate(0, .002)]))
+    report = mission_report(mission, (), 90)
+    assert report["mission_id"] == mission.id

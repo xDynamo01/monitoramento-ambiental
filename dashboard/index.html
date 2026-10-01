@@ -4,11 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>R.A.M.A. Mission Console</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <style>
     body { font-family: system-ui, sans-serif; max-width: 900px; margin: 40px auto; padding: 0 20px; color: #17324d; }
     .card { border: 1px solid #d7e1ea; border-radius: 12px; padding: 20px; margin: 16px 0; }
     button { background: #1264a3; color: white; border: 0; border-radius: 6px; padding: 10px 14px; cursor: pointer; }
     pre { background: #f4f7fa; padding: 12px; overflow: auto; }
+    #map { height: 420px; border-radius: 12px; }
   </style>
 </head>
 <body>
@@ -18,10 +20,22 @@
     <button id="refresh">Refresh missions</button>
     <pre id="missions">No missions loaded.</pre>
   </div>
+  <div class="card"><div id="map"></div></div>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
+    const map = L.map('map').setView([-23.55, -46.63], 12);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap contributors' }).addTo(map);
     document.querySelector('#refresh').onclick = async () => {
       const response = await fetch('/missions');
-      document.querySelector('#missions').textContent = JSON.stringify(await response.json(), null, 2);
+      const missions = await response.json();
+      document.querySelector('#missions').textContent = JSON.stringify(missions, null, 2);
+      missions.forEach(item => {
+        try {
+          const payload = JSON.parse(item.payload);
+          const points = payload.plan.route.map(p => [p.latitude, p.longitude]);
+          if (points.length) L.polyline(points, {color: '#1264a3'}).addTo(map);
+        } catch (_) { /* Older records may not contain a route payload. */ }
+      });
     };
   </script>
 </body>

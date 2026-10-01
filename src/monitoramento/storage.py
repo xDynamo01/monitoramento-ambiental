@@ -27,6 +27,15 @@ class MissionRepository:
                 event_type TEXT NOT NULL,
                 payload TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS telemetry_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                mission_id TEXT NOT NULL,
+                payload TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS battery_profiles (
+                id TEXT PRIMARY KEY,
+                payload TEXT NOT NULL
+            );
             """
         )
         self.connection.commit()
@@ -49,6 +58,17 @@ class MissionRepository:
             })),
         )
         self.connection.commit()
+
+    def save_telemetry(self, mission: Mission, telemetry: dict) -> None:
+        self.connection.execute("INSERT INTO telemetry_logs(mission_id, payload) VALUES (?, ?)", (mission.id, json.dumps(telemetry)))
+        self.connection.commit()
+
+    def save_battery_profile(self, profile: dict) -> None:
+        self.connection.execute("INSERT OR REPLACE INTO battery_profiles(id, payload) VALUES (?, ?)", (profile["id"], json.dumps(profile)))
+        self.connection.commit()
+
+    def list_events(self, mission_id: str) -> list[dict]:
+        return [dict(row) for row in self.connection.execute("SELECT event_type, payload FROM mission_events WHERE mission_id = ? ORDER BY id", (mission_id,))]
 
     def list_missions(self) -> list[dict]:
         return [dict(row) for row in self.connection.execute("SELECT id, name, state, payload FROM missions ORDER BY rowid DESC")]

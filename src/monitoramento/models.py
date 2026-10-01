@@ -16,8 +16,11 @@ class MissionState(str, Enum):
     DRAFT = "draft"
     READY = "ready"
     PATROLLING = "patrolling"
+    RUNNING = "patrolling"
+    PAUSED = "paused"
     RETURNING = "returning"
     COMPLETE = "complete"
+    COMPLETED = "complete"
     ABORTED = "aborted"
 
 
@@ -59,6 +62,7 @@ class Mission:
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     started_at: datetime | None = None
     completed_at: datetime | None = None
+    aborted_at: datetime | None = None
 
     def __post_init__(self) -> None:
         if not self.name.strip():
@@ -89,6 +93,22 @@ class Mission:
         self.state = MissionState.COMPLETE
         self.completed_at = when or datetime.now(timezone.utc)
 
+    def pause(self) -> None:
+        if self.state is not MissionState.PATROLLING:
+            raise RuntimeError(f"missão não pode pausar: {self.state.value}")
+        self.state = MissionState.PAUSED
+
+    def resume(self) -> None:
+        if self.state is not MissionState.PAUSED:
+            raise RuntimeError(f"missão não pode retomar: {self.state.value}")
+        self.state = MissionState.PATROLLING
+
+    def abort(self, when: datetime | None = None) -> None:
+        if self.state in {MissionState.COMPLETE, MissionState.ABORTED}:
+            raise RuntimeError(f"missão já encerrada: {self.state.value}")
+        self.state = MissionState.ABORTED
+        self.aborted_at = when or datetime.now(timezone.utc)
+
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-compatible representation for the future API/storage layer."""
         value = asdict(self)
@@ -96,6 +116,7 @@ class Mission:
         value["created_at"] = self.created_at.isoformat()
         value["started_at"] = self.started_at.isoformat() if self.started_at else None
         value["completed_at"] = self.completed_at.isoformat() if self.completed_at else None
+        value["aborted_at"] = self.aborted_at.isoformat() if self.aborted_at else None
         value["plan"]["base"] = asdict(self.plan.base)
         value["plan"]["route"] = [asdict(point) for point in self.plan.route]
         return value
