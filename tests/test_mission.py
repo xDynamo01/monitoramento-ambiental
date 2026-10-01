@@ -1,5 +1,5 @@
 from monitoramento.mission import MissionController
-from monitoramento.models import Coordinate, MissionConfig, Telemetry, MissionState
+from monitoramento.models import Coordinate, Mission, MissionConfig, MissionState, Telemetry
 from monitoramento.routes import polygon_survey, recorded_track, route_length_m
 from monitoramento.return_system import BatteryModel, IndependentReturnSystem, ReturnDecision
 
@@ -59,5 +59,31 @@ def test_return_is_latched_and_independent_from_mission_state():
     system = IndependentReturnSystem(route, BatteryModel(percent_per_km=10, reserve_percent=10))
     status = system.evaluate(Telemetry(route.route[0], 10))
     assert status.decision is ReturnDecision.RETURN_TO_BASE
+
+
+def test_mission_lifecycle_and_serialization():
+    base = Coordinate(-23.0, -46.0, 100)
+    plan = recorded_track(base, [Coordinate(-23.001, -46.001, 100), Coordinate(-23.002, -46.002, 100)])
+    mission = Mission("Forest sector A", plan, altitude_m=120, speed_mps=12, initial_battery_percent=95)
+    assert mission.state is MissionState.DRAFT
+    mission.mark_ready()
+    mission.mark_started()
+    assert mission.state is MissionState.PATROLLING
+    assert mission.started_at is not None
+    mission.mark_finished()
+    data = mission.to_dict()
+    assert data["state"] == "complete"
+    assert data["plan"]["source"] == "recorded_track"
+    assert data["plan"]["route"][0]["latitude"] == -23.001
+
+
+def test_mission_rejects_invalid_flight_parameters():
+    base = Coordinate(0, 0)
+    plan = recorded_track(base, [Coordinate(0, .001), Coordinate(0, .002)])
+    try:
+        Mission("invalid", plan, speed_mps=0)
+        assert False
+    except ValueError:
+        pass
     status = system.evaluate(Telemetry(route.route[0], 95))
     assert status.decision is ReturnDecision.RETURN_TO_BASE
