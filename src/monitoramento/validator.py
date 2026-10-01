@@ -44,15 +44,9 @@ class MissionValidator:
         self,
         battery: BatteryModel,
         config: MissionConfig | None = None,
-        min_altitude_m: float = 5.0,
-        max_altitude_m: float = 120.0,
-        min_speed_mps: float = 1.0,
     ):
         self.battery = battery
         self.config = config or MissionConfig()
-        self.min_altitude_m = min_altitude_m
-        self.max_altitude_m = max_altitude_m
-        self.min_speed_mps = min_speed_mps
 
     def validate(self, mission: Mission) -> ValidationResult:
         issues: list[ValidationIssue] = []
@@ -63,26 +57,21 @@ class MissionValidator:
             issues.append(self._error("ROUTE_TOO_SHORT", "a rota precisa de pelo menos dois pontos"))
         if len(route) > self.config.max_route_points:
             issues.append(self._error("ROUTE_TOO_LONG", "a rota excede o limite de pontos configurado"))
-        if mission.altitude_m < self.min_altitude_m:
-            issues.append(self._error("ALTITUDE_TOO_LOW", "a altitude está abaixo do mínimo operacional"))
-        if mission.altitude_m > self.max_altitude_m:
-            issues.append(self._error("ALTITUDE_TOO_HIGH", "a altitude excede o máximo operacional configurado"))
-        if mission.speed_mps < self.min_speed_mps:
-            issues.append(self._error("SPEED_TOO_LOW", "a velocidade está abaixo do mínimo operacional"))
         if route and route[0] == mission.plan.base:
             issues.append(self._warning("ROUTE_STARTS_AT_BASE", "o primeiro ponto da rota coincide com a base"))
 
         return_system = IndependentReturnSystem(mission.plan, self.battery)
         trigger = return_system.trigger_percent
-        if mission.initial_battery_percent <= trigger:
+        required = return_system.required_mission_battery_percent()
+        if mission.initial_battery_percent <= required:
             issues.append(self._error(
                 "INSUFFICIENT_INITIAL_BATTERY",
-                f"bateria inicial ({mission.initial_battery_percent:.1f}%) não cobre o retorno necessário ({trigger:.1f}%)",
+                f"bateria inicial ({mission.initial_battery_percent:.1f}%) não cobre a missão completa ({required:.1f}%)",
             ))
-        elif mission.initial_battery_percent <= trigger + 5:
+        elif mission.initial_battery_percent <= required + 5:
             issues.append(self._warning(
                 "LOW_INITIAL_BATTERY_MARGIN",
-                f"margem inicial de bateria reduzida: {mission.initial_battery_percent - trigger:.1f}%",
+                f"margem de autonomia reduzida: {mission.initial_battery_percent - required:.1f}%",
             ))
 
         if route_length == 0:

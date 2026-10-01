@@ -54,6 +54,14 @@ def test_return_threshold_uses_farthest_route_point():
     assert system.farthest_point == route.route[-1]
 
 
+def test_required_battery_covers_outbound_survey_and_inbound():
+    base = Coordinate(0, 0)
+    route = recorded_track(base, [Coordinate(0, .001), Coordinate(0, .010)])
+    system = IndependentReturnSystem(route, BatteryModel(percent_per_km=20, reserve_percent=12))
+    required = system.required_mission_battery_percent()
+    assert required > system.trigger_percent
+
+
 def test_return_is_latched_and_independent_from_mission_state():
     base = Coordinate(0, 0)
     route = recorded_track(base, [Coordinate(0, .005), Coordinate(0, .006)])
@@ -112,7 +120,7 @@ def test_validator_reports_low_margin_as_warning():
     plan = recorded_track(base, [Coordinate(0, .001), Coordinate(0, .010)])
     mission = Mission("Sector A", plan, initial_battery_percent=39)
     result = MissionValidator(BatteryModel(percent_per_km=20, reserve_percent=12)).validate(mission)
-    assert result.valid
-    assert any(issue.level is IssueLevel.WARNING for issue in result.warnings)
+    assert not result.valid
+    assert any(issue.code == "INSUFFICIENT_INITIAL_BATTERY" for issue in result.errors)
     status = system.evaluate(Telemetry(route.route[0], 95))
     assert status.decision is ReturnDecision.RETURN_TO_BASE

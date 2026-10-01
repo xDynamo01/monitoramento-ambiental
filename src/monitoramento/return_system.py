@@ -64,6 +64,14 @@ class IndependentReturnSystem:
         return_percent = (distance_to_base_m / 1000) * self.battery.percent_per_km
         return min(100.0, return_percent + self.battery.reserve_percent)
 
+    def required_mission_battery_percent(self) -> float:
+        """Estimate battery needed for base → route → base with reserve."""
+        outbound = distance_m(self.plan.base, self.plan.route[0])
+        survey = route_distance_m(self.plan.route)
+        inbound = distance_m(self.plan.route[-1], self.plan.base)
+        total = outbound + survey + inbound
+        return min(100.0, (total / 1000) * self.battery.percent_per_km + self.battery.reserve_percent)
+
     def evaluate(self, telemetry: Telemetry) -> ReturnStatus:
         """Evaluate battery telemetry and latch return once the limit is reached."""
         if not telemetry.connected or telemetry.battery_percent <= self.battery.emergency_percent:
@@ -96,3 +104,7 @@ def distance_m(first: Coordinate, second: Coordinate) -> float:
     north = (first.latitude - second.latitude) * METERS_PER_DEGREE
     east = (first.longitude - second.longitude) * METERS_PER_DEGREE * cos(mean_latitude)
     return sqrt(north * north + east * east)
+
+
+def route_distance_m(route: tuple[Coordinate, ...] | list[Coordinate]) -> float:
+    return sum(distance_m(first, second) for first, second in zip(route, route[1:]))
