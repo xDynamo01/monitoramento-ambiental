@@ -3,6 +3,8 @@ from monitoramento.models import Coordinate, Mission, MissionConfig, MissionStat
 from monitoramento.routes import polygon_survey, recorded_track, route_length_m
 from monitoramento.return_system import BatteryModel, IndependentReturnSystem, ReturnDecision
 from monitoramento.validator import IssueLevel, MissionValidator
+from monitoramento.drone import DroneProfile
+from monitoramento.simulator import EventType, SimulatedMissionExecutor
 
 
 def test_recorded_track_requires_two_points():
@@ -122,5 +124,28 @@ def test_validator_reports_low_margin_as_warning():
     result = MissionValidator(BatteryModel(percent_per_km=20, reserve_percent=12)).validate(mission)
     assert not result.valid
     assert any(issue.code == "INSUFFICIENT_INITIAL_BATTERY" for issue in result.errors)
+
+
+def test_manual_drone_profile_provides_battery_model():
+    profile = DroneProfile(
+        id="drone-001",
+        name="Survey Quad",
+        aircraft_type="multirotor",
+        percent_per_km=35,
+        has_camera=True,
+    )
+    assert profile.battery_model().percent_per_km == 35
+    assert profile.to_dict()["aircraft_type"] == "multirotor"
+
+
+def test_simulator_completes_valid_mission_and_records_events():
+    base = Coordinate(0, 0)
+    plan = recorded_track(base, [Coordinate(0, .001), Coordinate(0, .002)])
+    mission = Mission("Sector A", plan, initial_battery_percent=90)
+    executor = SimulatedMissionExecutor(mission, DroneProfile("d1", "Test", percent_per_km=20))
+    events = executor.run()
+    assert mission.state is MissionState.COMPLETE
+    assert events[0].type is EventType.MISSION_STARTED
+    assert events[-1].type is EventType.MISSION_COMPLETED
     status = system.evaluate(Telemetry(route.route[0], 95))
     assert status.decision is ReturnDecision.RETURN_TO_BASE

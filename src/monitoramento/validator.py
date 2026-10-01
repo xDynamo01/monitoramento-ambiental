@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 from .models import Mission, MissionConfig
+from .drone import DroneProfile
 from .return_system import BatteryModel, IndependentReturnSystem
 from .routes import route_length_m
 
@@ -42,10 +43,10 @@ class MissionValidator:
 
     def __init__(
         self,
-        battery: BatteryModel,
+        battery: BatteryModel | DroneProfile,
         config: MissionConfig | None = None,
     ):
-        self.battery = battery
+        self.battery = battery.battery_model() if isinstance(battery, DroneProfile) else battery
         self.config = config or MissionConfig()
 
     def validate(self, mission: Mission) -> ValidationResult:

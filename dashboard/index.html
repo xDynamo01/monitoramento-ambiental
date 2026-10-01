@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>R.A.M.A. Mission Console</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 900px; margin: 40px auto; padding: 0 20px; color: #17324d; }
+    .card { border: 1px solid #d7e1ea; border-radius: 12px; padding: 20px; margin: 16px 0; }
+    button { background: #1264a3; color: white; border: 0; border-radius: 6px; padding: 10px 14px; cursor: pointer; }
+    pre { background: #f4f7fa; padding: 12px; overflow: auto; }
+  </style>
+</head>
+<body>
+  <h1>R.A.M.A. Mission Console</h1>
+  <p>Simulation dashboard for route validation, autonomy, and return-to-base safety.</p>
+  <div class="card">
+    <button id="refresh">Refresh missions</button>
+    <pre id="missions">No missions loaded.</pre>
+  </div>
+  <script>
+    document.querySelector('#refresh').onclick = async () => {
+      const response = await fetch('/missions');
+      document.querySelector('#missions').textContent = JSON.stringify(await response.json(), null, 2);
+    };
+  </script>
+</body>
+</html>
