@@ -2,6 +2,7 @@ from monitoramento.mission import MissionController
 from monitoramento.models import Coordinate, Mission, MissionConfig, MissionState, Telemetry
 from monitoramento.routes import polygon_survey, recorded_track, route_length_m
 from monitoramento.return_system import BatteryModel, IndependentReturnSystem, ReturnDecision
+from monitoramento.validator import IssueLevel, MissionValidator
 
 
 def test_recorded_track_requires_two_points():
@@ -85,5 +86,33 @@ def test_mission_rejects_invalid_flight_parameters():
         assert False
     except ValueError:
         pass
+
+
+def test_validator_approves_mission_with_enough_battery():
+    base = Coordinate(0, 0)
+    plan = recorded_track(base, [Coordinate(0, .001), Coordinate(0, .002)])
+    mission = Mission("Sector A", plan, altitude_m=80, speed_mps=10, initial_battery_percent=90)
+    result = MissionValidator(BatteryModel(percent_per_km=20, reserve_percent=10)).validate(mission)
+    assert result.valid
+    assert result.errors == ()
+    assert result.farthest_distance_m > 0
+
+
+def test_validator_rejects_insufficient_battery():
+    base = Coordinate(0, 0)
+    plan = recorded_track(base, [Coordinate(0, .001), Coordinate(0, .010)])
+    mission = Mission("Sector A", plan, initial_battery_percent=20)
+    result = MissionValidator(BatteryModel(percent_per_km=20, reserve_percent=12)).validate(mission)
+    assert not result.valid
+    assert any(issue.code == "INSUFFICIENT_INITIAL_BATTERY" for issue in result.errors)
+
+
+def test_validator_reports_low_margin_as_warning():
+    base = Coordinate(0, 0)
+    plan = recorded_track(base, [Coordinate(0, .001), Coordinate(0, .010)])
+    mission = Mission("Sector A", plan, initial_battery_percent=39)
+    result = MissionValidator(BatteryModel(percent_per_km=20, reserve_percent=12)).validate(mission)
+    assert result.valid
+    assert any(issue.level is IssueLevel.WARNING for issue in result.warnings)
     status = system.evaluate(Telemetry(route.route[0], 95))
     assert status.decision is ReturnDecision.RETURN_TO_BASE
