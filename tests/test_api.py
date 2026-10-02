@@ -38,3 +38,12 @@ def test_api_environmental_analysis(tmp_path):
     assert result.status_code == 200
     assert result.json()["proof"]["network"] == "solana-devnet"
     assert result.json()["payment"]["status"] == "confirmed"
+
+
+def test_api_reloads_mission_after_restart(tmp_path):
+    database = str(tmp_path / "restart.db")
+    first = TestClient(create_app(database))
+    mission_id = first.post("/missions", json=payload()).json()["id"]
+    second = TestClient(create_app(database))
+    assert second.get(f"/missions/{mission_id}").status_code == 200
+    assert second.post(f"/missions/{mission_id}/validate").json()["valid"]

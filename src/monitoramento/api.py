@@ -27,6 +27,14 @@ def create_app(database: str = "monitoramento.db"):
     proof_provider = SimulatedSolanaProofProvider()
     payment_provider = SimulatedUsdcProvider()
 
+    for row in repository.list_missions():
+        mission = repository.get_mission(row["id"])
+        if mission:
+            profile = repository.get_drone_profile(mission.id)
+            if profile:
+                missions[mission.id] = mission
+                executors[mission.id] = SimulatedMissionExecutor(mission, profile)
+
     def mission_from_payload(payload: dict) -> tuple[Mission, DroneProfile]:
         base = Coordinate(**payload["base"])
         points = [Coordinate(**point) for point in payload["route"]]
@@ -49,6 +57,7 @@ def create_app(database: str = "monitoramento.db"):
             missions[mission.id] = mission
             executors[mission.id] = SimulatedMissionExecutor(mission, drone)
             repository.save(mission)
+            repository.save_drone_profile(drone, mission.id)
             return mission.to_dict()
         except (KeyError, TypeError, ValueError, RuntimeError) as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc

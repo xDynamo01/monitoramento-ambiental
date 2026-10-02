@@ -120,3 +120,24 @@ class Mission:
         value["plan"]["base"] = asdict(self.plan.base)
         value["plan"]["route"] = [asdict(point) for point in self.plan.route]
         return value
+
+    @classmethod
+    def from_dict(cls, value: dict[str, Any]) -> "Mission":
+        plan_value = value["plan"]
+        base = Coordinate(**plan_value["base"])
+        route = tuple(Coordinate(**point) for point in plan_value["route"])
+        mission = cls(
+            name=value["name"],
+            plan=MissionPlan(base, route, plan_value["source"]),
+            altitude_m=value.get("altitude_m", 100),
+            speed_mps=value.get("speed_mps", 10),
+            survey_spacing_m=value.get("survey_spacing_m"),
+            initial_battery_percent=value.get("initial_battery_percent", 100),
+            id=value["id"],
+            state=MissionState(value.get("state", MissionState.DRAFT.value)),
+            created_at=datetime.fromisoformat(value["created_at"]),
+            started_at=datetime.fromisoformat(value["started_at"]) if value.get("started_at") else None,
+            completed_at=datetime.fromisoformat(value["completed_at"]) if value.get("completed_at") else None,
+            aborted_at=datetime.fromisoformat(value["aborted_at"]) if value.get("aborted_at") else None,
+        )
+        return mission

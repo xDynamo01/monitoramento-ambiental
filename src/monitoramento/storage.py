@@ -5,6 +5,7 @@ import sqlite3
 from pathlib import Path
 
 from .models import Mission
+from .drone import DroneProfile
 from .simulator import MissionEvent
 
 
@@ -66,6 +67,24 @@ class MissionRepository:
     def save_battery_profile(self, profile: dict) -> None:
         self.connection.execute("INSERT OR REPLACE INTO battery_profiles(id, payload) VALUES (?, ?)", (profile["id"], json.dumps(profile)))
         self.connection.commit()
+
+    def save_drone_profile(self, profile: DroneProfile, key: str | None = None) -> None:
+        self.save_battery_profile(profile.to_dict() | {"id": key or profile.id, "profile_id": profile.id})
+
+    def get_mission(self, mission_id: str) -> Mission | None:
+        row = self.connection.execute("SELECT payload FROM missions WHERE id = ?", (mission_id,)).fetchone()
+        return Mission.from_dict(json.loads(row["payload"])) if row else None
+
+    def get_drone_profile(self, profile_id: str) -> DroneProfile | None:
+        row = self.connection.execute("SELECT payload FROM battery_profiles WHERE id = ?", (profile_id,)).fetchone()
+        if not row:
+            return None
+        payload = json.loads(row["payload"])
+        payload.pop("profile_id", None)
+        return DroneProfile.from_dict(payload)
+
+    def list_telemetry(self, mission_id: str) -> list[dict]:
+        return [json.loads(row["payload"]) for row in self.connection.execute("SELECT payload FROM telemetry_logs WHERE mission_id = ? ORDER BY id", (mission_id,))]
 
     def list_events(self, mission_id: str) -> list[dict]:
         return [dict(row) for row in self.connection.execute("SELECT event_type, payload FROM mission_events WHERE mission_id = ? ORDER BY id", (mission_id,))]
