@@ -1,0 +1,18 @@
+{
+  "id": "generic-sim-drone",
+  "name": "Generic Simulation Drone",
+  "aircraft_type": "multirotor",
+  "battery_capacity_mah": 10000,
+  "battery_voltage": 14.8,
+  "percent_per_km": 20,
+  "reserve_percent": 12,
+  "emergency_percent": 8,
+  "takeoff_percent": 3,
+  "landing_percent": 3,
+  "wind_margin_percent": 5,
+  "cruise_speed_mps": 10,
+  "default_altitude_m": 100,
+  "has_gps": true,
+  "has_camera": true,
+  "has_thermal_camera": false
+}

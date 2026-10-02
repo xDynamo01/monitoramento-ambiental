@@ -52,6 +52,21 @@ class ReturnStatus:
     distance_to_base_m: float
 
 
+@dataclass(frozen=True)
+class AutonomyEstimate:
+    outbound_distance_m: float
+    survey_distance_m: float
+    inbound_distance_m: float
+    total_distance_m: float
+    cruise_battery_percent: float
+    takeoff_percent: float
+    landing_percent: float
+    reserve_percent: float
+    wind_margin_percent: float
+    required_battery_percent: float
+    return_trigger_percent: float
+
+
 class IndependentReturnSystem:
     """Computes and enforces a dynamic return threshold for a route."""
 
@@ -78,6 +93,14 @@ class IndependentReturnSystem:
         cruise = (total / 1000) * self.battery.percent_per_km
         phases = self.battery.takeoff_percent + self.battery.landing_percent
         return min(100.0, cruise + phases + self.battery.reserve_percent + self.battery.wind_margin_percent)
+
+    def autonomy_estimate(self) -> AutonomyEstimate:
+        outbound = distance_m(self.plan.base, self.plan.route[0])
+        survey = route_distance_m(self.plan.route)
+        inbound = distance_m(self.plan.route[-1], self.plan.base)
+        total = outbound + survey + inbound
+        cruise = total / 1000 * self.battery.percent_per_km
+        return AutonomyEstimate(outbound, survey, inbound, total, cruise, self.battery.takeoff_percent, self.battery.landing_percent, self.battery.reserve_percent, self.battery.wind_margin_percent, self.required_mission_battery_percent(), self.trigger_percent)
 
     def evaluate(self, telemetry: Telemetry) -> ReturnStatus:
         """Evaluate battery telemetry and latch return once the limit is reached."""

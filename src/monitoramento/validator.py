@@ -28,6 +28,7 @@ class ValidationResult:
     route_length_m: float
     farthest_distance_m: float
     return_trigger_percent: float
+    required_mission_battery_percent: float
 
     @property
     def errors(self) -> tuple[ValidationIssue, ...]:
@@ -60,6 +61,10 @@ class MissionValidator:
             issues.append(self._error("ROUTE_TOO_LONG", "a rota excede o limite de pontos configurado"))
         if route and route[0] == mission.plan.base:
             issues.append(self._warning("ROUTE_STARTS_AT_BASE", "o primeiro ponto da rota coincide com a base"))
+        if len(set(route)) != len(route):
+            issues.append(self._error("DUPLICATE_ROUTE_POINTS", "a rota possui pontos duplicados"))
+        if any(first == second for first, second in zip(route, route[1:])):
+            issues.append(self._error("ZERO_LENGTH_SEGMENT", "a rota possui um trecho de distância zero"))
 
         return_system = IndependentReturnSystem(mission.plan, self.battery)
         trigger = return_system.trigger_percent
@@ -84,6 +89,7 @@ class MissionValidator:
             route_length_m=route_length,
             farthest_distance_m=return_system.farthest_distance_m,
             return_trigger_percent=trigger,
+            required_mission_battery_percent=required,
         )
 
     @staticmethod

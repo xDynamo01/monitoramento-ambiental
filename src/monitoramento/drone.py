@@ -32,8 +32,14 @@ class DroneProfile:
             raise ValueError("o drone precisa de id e nome")
         if self.percent_per_km <= 0:
             raise ValueError("percent_per_km deve ser positivo")
+        if not 0 <= self.emergency_percent <= self.reserve_percent <= 100:
+            raise ValueError("reservas de bateria devem estar entre 0 e 100")
         if self.battery_capacity_mah is not None and self.battery_capacity_mah <= 0:
             raise ValueError("a capacidade da bateria deve ser positiva")
+        if self.cruise_speed_mps is not None and self.cruise_speed_mps <= 0:
+            raise ValueError("a velocidade de cruzeiro deve ser positiva")
+        if self.default_altitude_m is not None and self.default_altitude_m < 0:
+            raise ValueError("a altitude padrão não pode ser negativa")
 
     def battery_model(self) -> BatteryModel:
         return BatteryModel(

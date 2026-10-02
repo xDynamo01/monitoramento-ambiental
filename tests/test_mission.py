@@ -75,6 +75,23 @@ def test_autonomy_includes_flight_phases_and_wind_margin():
     assert system.trigger_percent > 40
 
 
+def test_autonomy_estimate_breaks_down_the_full_flight():
+    base = Coordinate(0, 0)
+    route = recorded_track(base, [Coordinate(0, .001), Coordinate(0, .010)])
+    estimate = IndependentReturnSystem(route, BatteryModel(20)).autonomy_estimate()
+    assert estimate.total_distance_m == estimate.outbound_distance_m + estimate.survey_distance_m + estimate.inbound_distance_m
+    assert estimate.required_battery_percent > estimate.cruise_battery_percent
+
+
+def test_validator_rejects_duplicate_route_points():
+    base = Coordinate(0, 0)
+    duplicate = Coordinate(0, .001)
+    mission = Mission("duplicate", recorded_track(base, [duplicate, duplicate]))
+    result = MissionValidator(BatteryModel(20)).validate(mission)
+    assert not result.valid
+    assert any(issue.code == "DUPLICATE_ROUTE_POINTS" for issue in result.errors)
+
+
 def test_return_is_latched_and_independent_from_mission_state():
     base = Coordinate(0, 0)
     route = recorded_track(base, [Coordinate(0, .005), Coordinate(0, .006)])
@@ -147,6 +164,14 @@ def test_manual_drone_profile_provides_battery_model():
     )
     assert profile.battery_model().percent_per_km == 35
     assert profile.to_dict()["aircraft_type"] == "multirotor"
+
+
+def test_drone_profile_rejects_invalid_battery_reserve():
+    try:
+        DroneProfile("invalid", "Invalid", reserve_percent=5, emergency_percent=8)
+        assert False
+    except ValueError:
+        pass
 
 
 def test_simulator_completes_valid_mission_and_records_events():

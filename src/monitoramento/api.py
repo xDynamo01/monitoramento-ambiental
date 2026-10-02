@@ -94,6 +94,7 @@ def create_app(database: str = "monitoramento.db"):
             "route_length_m": result.route_length_m,
             "farthest_distance_m": result.farthest_distance_m,
             "return_trigger_percent": result.return_trigger_percent,
+            "required_mission_battery_percent": result.required_mission_battery_percent,
             "errors": [issue.__dict__ for issue in result.errors],
             "warnings": [issue.__dict__ for issue in result.warnings],
         }
