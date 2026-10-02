@@ -59,3 +59,13 @@ def test_api_route_management():
     edited = client.post("/routes/edit", json={"base": base, "route": points, "index": 1, "point": {"latitude": 0, "longitude": .003, "altitude_m": 100}})
     assert edited.json()["route"][1]["longitude"] == .003
     assert client.post("/routes/export", json={"base": base, "route": points}).json()["geometry"]["type"] == "LineString"
+
+
+def test_api_fleet_handover(tmp_path):
+    client = TestClient(create_app(str(tmp_path / "fleet.db")))
+    mission_id = client.post("/missions", json=payload()).json()["id"]
+    assert client.post("/fleet/drones", json={"drone_id": "a", "name": "A"}).status_code == 200
+    assert client.post("/fleet/drones", json={"drone_id": "b", "name": "B"}).status_code == 200
+    assert client.post("/fleet/sector-a/assign", json={"mission_id": mission_id}).json()["drone_id"] == "a"
+    handover = client.post("/fleet/sector-a/handover", json={"mission_id": mission_id}).json()
+    assert handover == {"covered": True, "incoming_drone_id": "b"}

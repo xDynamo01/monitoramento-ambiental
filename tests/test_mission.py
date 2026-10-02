@@ -7,6 +7,7 @@ from monitoramento.drone import DroneProfile
 from monitoramento.simulator import EventType, SimulatedMissionExecutor
 from monitoramento.alerts import AlertLevel, AlertManager
 from monitoramento.reports import mission_report
+from monitoramento.fleet import DroneAvailability, FleetCoordinator, FleetDrone
 
 
 def test_recorded_track_requires_two_points():
@@ -172,6 +173,23 @@ def test_drone_profile_rejects_invalid_battery_reserve():
         assert False
     except ValueError:
         pass
+
+
+def test_fleet_handover_keeps_sector_covered_during_recharge():
+    base = Coordinate(0, 0)
+    mission = Mission("Sector A", recorded_track(base, [Coordinate(0, .001), Coordinate(0, .002)]))
+    fleet = FleetCoordinator()
+    fleet.register(FleetDrone("drone-a", "Drone A"))
+    fleet.register(FleetDrone("drone-b", "Drone B"))
+    assert fleet.assign("sector-a", mission).drone_id == "drone-a"
+    incoming = fleet.begin_return("sector-a", mission)
+    assert incoming is not None
+    assert incoming.drone_id == "drone-b"
+    assert fleet.coverage("sector-a").drone_id == "drone-b"
+    fleet.start_charging("drone-a")
+    assert fleet.drones["drone-a"].availability is DroneAvailability.CHARGING
+    fleet.finish_charging("drone-a")
+    assert fleet.drones["drone-a"].availability is DroneAvailability.AVAILABLE
 
 
 def test_simulator_completes_valid_mission_and_records_events():

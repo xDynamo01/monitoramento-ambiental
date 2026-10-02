@@ -13,6 +13,7 @@ from .validator import MissionValidator
 from .environmental import AnalysisType, EnvironmentalReading, EnvironmentalStore
 from .payments import SimulatedUsdcProvider
 from .provenance import SimulatedSolanaProofProvider
+from .fleet import FleetCoordinator, FleetDrone
 
 
 def create_app(database: str = "monitoramento.db"):
@@ -28,6 +29,7 @@ def create_app(database: str = "monitoramento.db"):
     environmental = EnvironmentalStore()
     proof_provider = SimulatedSolanaProofProvider()
     payment_provider = SimulatedUsdcProvider()
+    fleet = FleetCoordinator()
 
     for saved in repository.list_readings():
         from datetime import datetime
@@ -63,6 +65,38 @@ def create_app(database: str = "monitoramento.db"):
     @app.get("/health")
     def health():
         return {"status": "ok", "hardware": "simulation"}
+
+    @app.post("/fleet/drones")
+    def register_fleet_drone(payload: dict):
+        drone = FleetDrone(payload["drone_id"], payload["name"], battery_percent=payload.get("battery_percent", 100))
+        fleet.register(drone)
+        return drone.__dict__
+
+    @app.get("/fleet")
+    def fleet_status():
+        return {"drones": [drone.__dict__ for drone in fleet.drones.values()], "coverage": fleet.sector_assignments, "handovers": [handover.__dict__ for handover in fleet.handovers]}
+
+    @app.post("/fleet/{sector_id}/assign")
+    def assign_fleet_drone(sector_id: str, payload: dict):
+        mission = get_mission(payload["mission_id"])
+        drone = fleet.assign(sector_id, mission, payload.get("drone_id"))
+        return drone.__dict__
+
+    @app.post("/fleet/{sector_id}/handover")
+    def handover_fleet_drone(sector_id: str, payload: dict):
+        mission = get_mission(payload["mission_id"])
+        incoming = fleet.begin_return(sector_id, mission)
+        return {"covered": incoming is not None, "incoming_drone_id": incoming.drone_id if incoming else None}
+
+    @app.post("/fleet/{drone_id}/charging/start")
+    def start_fleet_charging(drone_id: str):
+        fleet.start_charging(drone_id)
+        return fleet.drones[drone_id].__dict__
+
+    @app.post("/fleet/{drone_id}/charging/finish")
+    def finish_fleet_charging(drone_id: str, payload: dict | None = None):
+        fleet.finish_charging(drone_id, (payload or {}).get("battery_percent", 100))
+        return fleet.drones[drone_id].__dict__
 
     @app.post("/missions")
     def create_mission(payload: dict):

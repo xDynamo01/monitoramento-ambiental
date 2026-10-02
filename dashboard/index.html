@@ -43,6 +43,10 @@
     </div>
     <pre id="events">No events loaded.</pre>
   </div>
+  <div class="card">
+    <h2>Fleet coverage</h2>
+    <pre id="fleet">No fleet data loaded.</pre>
+  </div>
   <div class="card"><div id="map"></div></div>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
@@ -84,6 +88,7 @@
         document.querySelector('#alert-count').textContent = alerts.length;
         document.querySelector('#events').textContent = JSON.stringify(await api(`/missions/${selectedMission}/events`), null, 2);
       } catch (_) { /* The mission may not have started yet. */ }
+      try { document.querySelector('#fleet').textContent = JSON.stringify(await api('/fleet'), null, 2); } catch (_) {}
     }
     document.querySelector('#refresh').onclick = async () => {
       await refresh();
