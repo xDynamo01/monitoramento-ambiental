@@ -151,6 +151,18 @@ def test_simulator_completes_valid_mission_and_records_events():
     assert events[-1].type is EventType.MISSION_COMPLETED
 
 
+def test_simulator_records_progressive_telemetry_and_handles_link_loss():
+    base = Coordinate(0, 0)
+    mission = Mission("Long sector", recorded_track(base, [Coordinate(0, .01), Coordinate(0, .02)]), initial_battery_percent=90)
+    executor = SimulatedMissionExecutor(mission, DroneProfile("d1", "Slow", percent_per_km=10, cruise_speed_mps=10))
+    executor.start()
+    executor.step(elapsed_seconds=1)
+    assert len(executor.telemetry_history) == 1
+    executor.simulate_failure("communication")
+    executor.step(elapsed_seconds=60)
+    assert any(alert.code == "COMMUNICATION_LOST" for alert in executor.alert_manager.all())
+
+
 def test_mission_can_pause_resume_and_abort():
     base = Coordinate(0, 0)
     mission = Mission("Sector A", recorded_track(base, [Coordinate(0, .001), Coordinate(0, .002)]))

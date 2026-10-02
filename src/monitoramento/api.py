@@ -108,11 +108,16 @@ def create_app(database: str = "monitoramento.db"):
 
     @app.get("/missions/{mission_id}/telemetry")
     def telemetry(mission_id: str):
-        return executors[mission_id].telemetry.__dict__
+        executor = executors[mission_id]
+        return [item.__dict__ for item in executor.telemetry_history] or [executor.telemetry.__dict__]
 
     @app.get("/missions/{mission_id}/events")
     def events(mission_id: str):
         return repository.list_events(mission_id)
+
+    @app.get("/missions/{mission_id}/alerts")
+    def alerts(mission_id: str):
+        return [alert.__dict__ for alert in executors[mission_id].alert_manager.all()]
 
     @app.post("/routes/geojson")
     async def import_geojson(file: UploadFile, base_latitude: float, base_longitude: float):
