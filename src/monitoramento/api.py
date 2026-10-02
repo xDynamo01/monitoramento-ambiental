@@ -5,7 +5,7 @@ from dataclasses import asdict
 from .drone import DroneProfile
 from .models import Coordinate, Mission, MissionState
 from .reports import mission_report
-from .route_manager import export_geojson
+from .route_manager import export_geojson, remove_invalid_points, replace_point
 from .routes import geojson_route, polygon_survey, recorded_track
 from .simulator import SimulatedMissionExecutor
 from .storage import MissionRepository
@@ -186,6 +186,30 @@ def create_app(database: str = "monitoramento.db"):
         polygon = [Coordinate(**point) for point in payload["polygon"]]
         plan = polygon_survey(base, polygon, payload.get("spacing_m", 50))
         return {"source": plan.source, "route": [point.__dict__ for point in plan.route]}
+
+    @app.post("/routes/manual")
+    def create_manual_route(payload: dict):
+        base = Coordinate(**payload["base"])
+        points = [Coordinate(**point) for point in payload["points"]]
+        plan = recorded_track(base, remove_invalid_points(points))
+        return {"source": plan.source, "route": [point.__dict__ for point in plan.route]}
+
+    @app.post("/routes/edit")
+    def edit_route(payload: dict):
+        base = Coordinate(**payload["base"])
+        original = recorded_track(base, [Coordinate(**point) for point in payload["route"]])
+        edited = replace_point(original, int(payload["index"]), Coordinate(**payload["point"]))
+        return {"source": edited.source, "route": [point.__dict__ for point in edited.route]}
+
+    @app.post("/routes/clean")
+    def clean_route(payload: dict):
+        return {"route": [point.__dict__ for point in remove_invalid_points([Coordinate(**point) for point in payload["route"]])]}
+
+    @app.post("/routes/export")
+    def export_route(payload: dict):
+        base = Coordinate(**payload["base"])
+        plan = recorded_track(base, [Coordinate(**point) for point in payload["route"]])
+        return {"type": "Feature", "properties": {"source": plan.source}, "geometry": {"type": "LineString", "coordinates": [[point.longitude, point.latitude, point.altitude_m] for point in plan.route]}}
 
     @app.get("/missions/{mission_id}/report")
     def report(mission_id: str):

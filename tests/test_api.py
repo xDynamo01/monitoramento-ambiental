@@ -48,3 +48,14 @@ def test_api_reloads_mission_after_restart(tmp_path):
     second = TestClient(create_app(database))
     assert second.get(f"/missions/{mission_id}").status_code == 200
     assert second.post(f"/missions/{mission_id}/validate").json()["valid"]
+
+
+def test_api_route_management():
+    client = TestClient(create_app(":memory:"))
+    base = {"latitude": 0, "longitude": 0, "altitude_m": 0}
+    points = [{"latitude": 0, "longitude": .001, "altitude_m": 100}, {"latitude": 0, "longitude": .002, "altitude_m": 100}]
+    created = client.post("/routes/manual", json={"base": base, "points": points})
+    assert created.status_code == 200
+    edited = client.post("/routes/edit", json={"base": base, "route": points, "index": 1, "point": {"latitude": 0, "longitude": .003, "altitude_m": 100}})
+    assert edited.json()["route"][1]["longitude"] == .003
+    assert client.post("/routes/export", json={"base": base, "route": points}).json()["geometry"]["type"] == "LineString"
