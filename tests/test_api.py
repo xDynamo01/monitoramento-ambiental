@@ -69,3 +69,13 @@ def test_api_fleet_handover(tmp_path):
     assert client.post("/fleet/sector-a/assign", json={"mission_id": mission_id}).json()["drone_id"] == "a"
     handover = client.post("/fleet/sector-a/handover", json={"mission_id": mission_id}).json()
     assert handover == {"covered": True, "incoming_drone_id": "b"}
+
+
+def test_api_scheduler_controls_sector_coverage(tmp_path):
+    client = TestClient(create_app(str(tmp_path / "scheduler.db")))
+    mission_id = client.post("/missions", json=payload()).json()["id"]
+    client.post("/fleet/drones", json={"drone_id": "a", "name": "A"})
+    client.post("/fleet/drones", json={"drone_id": "b", "name": "B"})
+    assert client.post("/fleet/sectors", json={"sector_id": "s1", "mission_id": mission_id}).status_code == 200
+    assert client.post("/fleet/sectors/s1/dispatch").json()["drone_id"] == "a"
+    assert client.post("/fleet/sectors/s1/handover").json()["drone_id"] == "b"

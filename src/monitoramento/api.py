@@ -14,6 +14,7 @@ from .environmental import AnalysisType, EnvironmentalReading, EnvironmentalStor
 from .payments import SimulatedUsdcProvider
 from .provenance import SimulatedSolanaProofProvider
 from .fleet import FleetCoordinator, FleetDrone
+from .scheduler import CoverageScheduler, Sector
 
 
 def create_app(database: str = "monitoramento.db"):
@@ -30,6 +31,7 @@ def create_app(database: str = "monitoramento.db"):
     proof_provider = SimulatedSolanaProofProvider()
     payment_provider = SimulatedUsdcProvider()
     fleet = FleetCoordinator()
+    scheduler = CoverageScheduler(fleet)
 
     for saved in repository.list_readings():
         from datetime import datetime
@@ -74,7 +76,23 @@ def create_app(database: str = "monitoramento.db"):
 
     @app.get("/fleet")
     def fleet_status():
-        return {"drones": [drone.__dict__ for drone in fleet.drones.values()], "coverage": fleet.sector_assignments, "handovers": [handover.__dict__ for handover in fleet.handovers]}
+        return {"drones": [drone.__dict__ for drone in fleet.drones.values()], "coverage": fleet.sector_assignments, "sectors": scheduler.status(), "handovers": [handover.__dict__ for handover in fleet.handovers]}
+
+    @app.post("/fleet/sectors")
+    def register_sector(payload: dict):
+        mission = get_mission(payload["mission_id"])
+        scheduler.add_sector(Sector(payload["sector_id"], mission))
+        return {"sector_id": payload["sector_id"], "state": "uncovered"}
+
+    @app.post("/fleet/sectors/{sector_id}/dispatch")
+    def dispatch_sector(sector_id: str):
+        drone = scheduler.dispatch(sector_id)
+        return {"covered": drone is not None, "drone_id": drone.drone_id if drone else None, "state": scheduler.status()[sector_id]}
+
+    @app.post("/fleet/sectors/{sector_id}/handover")
+    def scheduled_handover(sector_id: str):
+        drone = scheduler.handle_return_request(sector_id)
+        return {"covered": drone is not None, "drone_id": drone.drone_id if drone else None, "state": scheduler.status()[sector_id]}
 
     @app.post("/fleet/{sector_id}/assign")
     def assign_fleet_drone(sector_id: str, payload: dict):

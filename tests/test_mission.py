@@ -8,6 +8,8 @@ from monitoramento.simulator import EventType, SimulatedMissionExecutor
 from monitoramento.alerts import AlertLevel, AlertManager
 from monitoramento.reports import mission_report
 from monitoramento.fleet import DroneAvailability, FleetCoordinator, FleetDrone
+from monitoramento.geofence import point_inside, validate_route
+from monitoramento.scheduler import CoverageScheduler, Sector
 
 
 def test_recorded_track_requires_two_points():
@@ -190,6 +192,28 @@ def test_fleet_handover_keeps_sector_covered_during_recharge():
     assert fleet.drones["drone-a"].availability is DroneAvailability.CHARGING
     fleet.finish_charging("drone-a")
     assert fleet.drones["drone-a"].availability is DroneAvailability.AVAILABLE
+
+
+def test_scheduler_dispatches_and_handover_keeps_sector_covered():
+    base = Coordinate(0, 0)
+    mission = Mission("Sector A", recorded_track(base, [Coordinate(0, .001), Coordinate(0, .002)]))
+    fleet = FleetCoordinator()
+    fleet.register(FleetDrone("a", "A"))
+    fleet.register(FleetDrone("b", "B"))
+    scheduler = CoverageScheduler(fleet)
+    scheduler.add_sector(Sector("sector-a", mission))
+    assert scheduler.dispatch("sector-a").drone_id == "a"
+    assert scheduler.handle_return_request("sector-a").drone_id == "b"
+    assert scheduler.status()["sector-a"] == "covered"
+
+
+def test_geofence_rejects_route_outside_allowed_area():
+    area = [Coordinate(0, 0), Coordinate(0, .01), Coordinate(.01, .01), Coordinate(.01, 0)]
+    route = (Coordinate(.005, .005), Coordinate(.02, .02))
+    assert point_inside(route[0], area)
+    result = validate_route(route, area)
+    assert not result.valid
+    assert "ROUTE_OUTSIDE_ALLOWED_AREA" in result.violations
 
 
 def test_simulator_completes_valid_mission_and_records_events():

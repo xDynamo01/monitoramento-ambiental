@@ -7,6 +7,7 @@ from .models import Mission, MissionConfig
 from .drone import DroneProfile
 from .return_system import BatteryModel, IndependentReturnSystem
 from .routes import route_length_m
+from .geofence import validate_route
 
 
 class IssueLevel(str, Enum):
@@ -50,7 +51,7 @@ class MissionValidator:
         self.battery = battery.battery_model() if isinstance(battery, DroneProfile) else battery
         self.config = config or MissionConfig()
 
-    def validate(self, mission: Mission) -> ValidationResult:
+    def validate(self, mission: Mission, allowed_area=None, forbidden_areas=None) -> ValidationResult:
         issues: list[ValidationIssue] = []
         route = mission.plan.route
         route_length = route_length_m(route)
@@ -82,6 +83,9 @@ class MissionValidator:
 
         if route_length == 0:
             issues.append(self._error("ZERO_ROUTE_DISTANCE", "a distância da rota deve ser maior que zero"))
+        geofence = validate_route(route, allowed_area, forbidden_areas)
+        for violation in geofence.violations:
+            issues.append(self._error(violation, "a rota viola uma restrição geográfica"))
 
         return ValidationResult(
             valid=not any(issue.level is IssueLevel.ERROR for issue in issues),
