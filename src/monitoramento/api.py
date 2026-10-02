@@ -1,5 +1,7 @@
 """FastAPI surface for the hardware-free mission prototype."""
 
+from dataclasses import asdict
+
 from .drone import DroneProfile
 from .models import Coordinate, Mission, MissionState
 from .reports import mission_report
@@ -26,6 +28,14 @@ def create_app(database: str = "monitoramento.db"):
     environmental = EnvironmentalStore()
     proof_provider = SimulatedSolanaProofProvider()
     payment_provider = SimulatedUsdcProvider()
+
+    def telemetry_payload(item):
+        value = asdict(item) if hasattr(item, "__dataclass_fields__") else dict(item)
+        if "timestamp" in value and hasattr(value["timestamp"], "isoformat"):
+            value["timestamp"] = value["timestamp"].isoformat()
+        if isinstance(value.get("position"), dict):
+            value["position"] = dict(value["position"])
+        return value
 
     for row in repository.list_missions():
         mission = repository.get_mission(row["id"])
@@ -90,6 +100,31 @@ def create_app(database: str = "monitoramento.db"):
         executor.start()
         return executor.telemetry.__dict__
 
+    @app.post("/missions/{mission_id}/step")
+    def step_mission(mission_id: str, payload: dict | None = None):
+        executor = executors[mission_id]
+        telemetry = executor.step(float((payload or {}).get("elapsed_seconds", 60)))
+        repository.save(mission := executor.mission)
+        repository.save_telemetry(mission, telemetry_payload(telemetry))
+        return {"telemetry": telemetry_payload(telemetry), "state": mission.state.value, "alerts": [alert.__dict__ for alert in executor.alert_manager.all()]}
+
+    @app.post("/missions/{mission_id}/run")
+    def run_mission(mission_id: str, payload: dict | None = None):
+        executor = executors[mission_id]
+        events = executor.run(max_steps=int((payload or {}).get("max_steps", 10_000)), elapsed_seconds=float((payload or {}).get("elapsed_seconds", 60)))
+        repository.save(executor.mission)
+        for item in events:
+            repository.save_event(executor.mission, item)
+        for item in executor.telemetry_history:
+            repository.save_telemetry(executor.mission, telemetry_payload(item))
+        return {"state": executor.mission.state.value, "report": mission_report(executor.mission, events, executor.battery_percent)}
+
+    @app.post("/missions/{mission_id}/failure")
+    def inject_failure(mission_id: str, payload: dict):
+        executor = executors[mission_id]
+        executor.simulate_failure(payload["failure"])
+        return {"failure": payload["failure"], "accepted": True}
+
     @app.post("/missions/{mission_id}/pause")
     def pause_mission(mission_id: str):
         mission = get_mission(mission_id)
@@ -118,7 +153,8 @@ def create_app(database: str = "monitoramento.db"):
     @app.get("/missions/{mission_id}/telemetry")
     def telemetry(mission_id: str):
         executor = executors[mission_id]
-        return [item.__dict__ for item in executor.telemetry_history] or [executor.telemetry.__dict__]
+        stored = repository.list_telemetry(mission_id)
+        return stored or [item.__dict__ for item in executor.telemetry_history] or [executor.telemetry.__dict__]
 
     @app.get("/missions/{mission_id}/events")
     def events(mission_id: str):

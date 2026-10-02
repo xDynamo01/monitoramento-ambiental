@@ -23,6 +23,7 @@ def test_api_mission_lifecycle(tmp_path):
     mission_id = created.json()["id"]
     assert client.post(f"/missions/{mission_id}/validate").json()["valid"]
     assert client.post(f"/missions/{mission_id}/start").status_code == 200
+    assert client.post(f"/missions/{mission_id}/step", json={"elapsed_seconds": 60}).status_code == 200
     assert client.get(f"/missions/{mission_id}/telemetry").status_code == 200
     assert isinstance(client.get(f"/missions/{mission_id}/alerts").json(), list)
     assert client.post(f"/missions/{mission_id}/pause").status_code == 200
