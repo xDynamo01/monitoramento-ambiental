@@ -79,3 +79,16 @@ def test_api_scheduler_controls_sector_coverage(tmp_path):
     assert client.post("/fleet/sectors", json={"sector_id": "s1", "mission_id": mission_id}).status_code == 200
     assert client.post("/fleet/sectors/s1/dispatch").json()["drone_id"] == "a"
     assert client.post("/fleet/sectors/s1/handover").json()["drone_id"] == "b"
+
+
+def test_api_automates_handover_when_mission_returns(tmp_path):
+    client = TestClient(create_app(str(tmp_path / "automatic-handover.db")))
+    mission_id = client.post("/missions", json=payload()).json()["id"]
+    client.post("/fleet/drones", json={"drone_id": "a", "name": "A"})
+    client.post("/fleet/drones", json={"drone_id": "b", "name": "B"})
+    client.post("/fleet/sectors", json={"sector_id": "s1", "mission_id": mission_id})
+    client.post("/fleet/sectors/s1/dispatch")
+    client.post(f"/missions/{mission_id}/start")
+    client.post(f"/missions/{mission_id}/run", json={"elapsed_seconds": 600})
+    status = client.get("/fleet").json()
+    assert status["coverage"]["s1"] == "b"

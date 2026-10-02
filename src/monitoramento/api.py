@@ -32,6 +32,7 @@ def create_app(database: str = "monitoramento.db"):
     payment_provider = SimulatedUsdcProvider()
     fleet = FleetCoordinator()
     scheduler = CoverageScheduler(fleet)
+    handover_done: set[str] = set()
 
     for saved in repository.list_readings():
         from datetime import datetime
@@ -164,6 +165,10 @@ def create_app(database: str = "monitoramento.db"):
         telemetry = executor.step(float((payload or {}).get("elapsed_seconds", 60)))
         repository.save(mission := executor.mission)
         repository.save_telemetry(mission, telemetry_payload(telemetry))
+        for sector_id, sector in scheduler.sectors.items():
+            if sector.mission.id == mission.id and mission.state.value == "returning" and sector_id not in handover_done:
+                scheduler.handle_return_request(sector_id)
+                handover_done.add(sector_id)
         for item in executor.events[previous_events:]:
             repository.save_event(mission, item)
         return {"telemetry": telemetry_payload(telemetry), "state": mission.state.value, "alerts": [alert.__dict__ for alert in executor.alert_manager.all()]}
@@ -173,6 +178,10 @@ def create_app(database: str = "monitoramento.db"):
         executor = executors[mission_id]
         events = executor.run(max_steps=int((payload or {}).get("max_steps", 10_000)), elapsed_seconds=float((payload or {}).get("elapsed_seconds", 60)))
         repository.save(executor.mission)
+        for sector_id, sector in scheduler.sectors.items():
+            if sector.mission.id == executor.mission.id and executor.mission.state.value == "complete" and sector_id not in handover_done:
+                scheduler.handle_return_request(sector_id)
+                handover_done.add(sector_id)
         for item in events:
             repository.save_event(executor.mission, item)
         for item in executor.telemetry_history:
