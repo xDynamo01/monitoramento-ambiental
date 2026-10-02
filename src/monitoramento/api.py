@@ -29,6 +29,10 @@ def create_app(database: str = "monitoramento.db"):
     proof_provider = SimulatedSolanaProofProvider()
     payment_provider = SimulatedUsdcProvider()
 
+    for saved in repository.list_readings():
+        from datetime import datetime
+        environmental.ingest(EnvironmentalReading(saved["node_id"], saved["latitude"], saved["longitude"], saved["data_type"], saved["measurements"], saved["metadata"], datetime.fromisoformat(saved["timestamp"])))
+
     def telemetry_payload(item):
         value = asdict(item) if hasattr(item, "__dataclass_fields__") else dict(item)
         if "timestamp" in value and hasattr(value["timestamp"], "isoformat"):
@@ -221,6 +225,7 @@ def create_app(database: str = "monitoramento.db"):
         try:
             reading = EnvironmentalReading.now(payload["node_id"], payload["latitude"], payload["longitude"], payload["data_type"], payload.get("measurements", {}), payload.get("metadata", {}))
             environmental.ingest(reading)
+            repository.save_reading(reading)
             return reading.to_dict()
         except (KeyError, TypeError, ValueError) as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc

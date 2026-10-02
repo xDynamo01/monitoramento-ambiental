@@ -6,6 +6,7 @@ from pathlib import Path
 
 from .models import Mission
 from .drone import DroneProfile
+from .environmental import EnvironmentalReading
 from .simulator import MissionEvent
 
 
@@ -35,6 +36,11 @@ class MissionRepository:
             );
             CREATE TABLE IF NOT EXISTS battery_profiles (
                 id TEXT PRIMARY KEY,
+                payload TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS environmental_readings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                node_id TEXT NOT NULL,
                 payload TEXT NOT NULL
             );
             """
@@ -85,6 +91,13 @@ class MissionRepository:
 
     def list_telemetry(self, mission_id: str) -> list[dict]:
         return [json.loads(row["payload"]) for row in self.connection.execute("SELECT payload FROM telemetry_logs WHERE mission_id = ? ORDER BY id", (mission_id,))]
+
+    def save_reading(self, reading: EnvironmentalReading) -> None:
+        self.connection.execute("INSERT INTO environmental_readings(node_id, payload) VALUES (?, ?)", (reading.node_id, json.dumps(reading.to_dict())))
+        self.connection.commit()
+
+    def list_readings(self) -> list[dict]:
+        return [json.loads(row["payload"]) for row in self.connection.execute("SELECT payload FROM environmental_readings ORDER BY id")]
 
     def list_events(self, mission_id: str) -> list[dict]:
         return [dict(row) for row in self.connection.execute("SELECT event_type, payload FROM mission_events WHERE mission_id = ? ORDER BY id", (mission_id,))]
