@@ -11,6 +11,9 @@
     button { background: #1264a3; color: white; border: 0; border-radius: 6px; padding: 10px 14px; cursor: pointer; }
     pre { background: #f4f7fa; padding: 12px; overflow: auto; }
     #map { height: 420px; border-radius: 12px; }
+    .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+    .metric { background: #f4f7fa; padding: 12px; border-radius: 8px; }
+    .metric strong { display: block; font-size: 1.3rem; }
   </style>
 </head>
 <body>
@@ -29,6 +32,16 @@
     <button id="resume">Resume selected</button>
     <button id="abort">Abort selected</button>
     <pre id="missions">No missions loaded.</pre>
+  </div>
+  <div class="card">
+    <h2>Flight status</h2>
+    <div class="metrics">
+      <div class="metric">State<strong id="state">--</strong></div>
+      <div class="metric">Battery<strong id="battery">--</strong></div>
+      <div class="metric">Position<strong id="position">--</strong></div>
+      <div class="metric">Alerts<strong id="alert-count">0</strong></div>
+    </div>
+    <pre id="events">No events loaded.</pre>
   </div>
   <div class="card"><div id="map"></div></div>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -58,6 +71,20 @@
         try { const payload = JSON.parse(item.payload); const points = payload.plan.route.map(p => [p.latitude, p.longitude]); if (points.length) missionLayers.push(L.polyline(points, {color: '#1264a3'}).addTo(map)); } catch (_) {}
       });
     }
+    async function refreshFlightStatus() {
+      if (!selectedMission) return;
+      try {
+        const telemetry = await api(`/missions/${selectedMission}/telemetry`);
+        const latest = telemetry[telemetry.length - 1];
+        document.querySelector('#battery').textContent = `${Number(latest.battery_percent).toFixed(1)}%`;
+        document.querySelector('#position').textContent = `${Number(latest.position.latitude).toFixed(5)}, ${Number(latest.position.longitude).toFixed(5)}`;
+        const mission = await api(`/missions/${selectedMission}`);
+        document.querySelector('#state').textContent = mission.state;
+        const alerts = await api(`/missions/${selectedMission}/alerts`);
+        document.querySelector('#alert-count').textContent = alerts.length;
+        document.querySelector('#events').textContent = JSON.stringify(await api(`/missions/${selectedMission}/events`), null, 2);
+      } catch (_) { /* The mission may not have started yet. */ }
+    }
     document.querySelector('#refresh').onclick = async () => {
       await refresh();
     };
@@ -65,6 +92,7 @@
     document.querySelector('#pause').onclick = () => selectedMission && api(`/missions/${selectedMission}/pause`, 'POST');
     document.querySelector('#resume').onclick = () => selectedMission && api(`/missions/${selectedMission}/resume`, 'POST');
     document.querySelector('#abort').onclick = () => selectedMission && api(`/missions/${selectedMission}/abort`, 'POST');
+    setInterval(refreshFlightStatus, 1000);
   </script>
 </body>
 </html>

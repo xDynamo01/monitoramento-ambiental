@@ -103,9 +103,12 @@ def create_app(database: str = "monitoramento.db"):
     @app.post("/missions/{mission_id}/step")
     def step_mission(mission_id: str, payload: dict | None = None):
         executor = executors[mission_id]
+        previous_events = len(executor.events)
         telemetry = executor.step(float((payload or {}).get("elapsed_seconds", 60)))
         repository.save(mission := executor.mission)
         repository.save_telemetry(mission, telemetry_payload(telemetry))
+        for item in executor.events[previous_events:]:
+            repository.save_event(mission, item)
         return {"telemetry": telemetry_payload(telemetry), "state": mission.state.value, "alerts": [alert.__dict__ for alert in executor.alert_manager.all()]}
 
     @app.post("/missions/{mission_id}/run")
