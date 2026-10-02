@@ -11,7 +11,7 @@ from .simulator import MissionEvent
 class MissionRepository:
     def __init__(self, database: str | Path = "monitoramento.db"):
         self.database = str(database)
-        self.connection = sqlite3.connect(self.database)
+        self.connection = sqlite3.connect(self.database, check_same_thread=False)
         self.connection.row_factory = sqlite3.Row
         self.connection.executescript(
             """

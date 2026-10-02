@@ -17,7 +17,17 @@
   <h1>R.A.M.A. Mission Console</h1>
   <p>Simulation dashboard for route validation, autonomy, and return-to-base safety.</p>
   <div class="card">
+    <h2>New simulated mission</h2>
+    <label>Name <input id="name" value="Area 001"></label>
+    <label>Route points <input id="route" value="0.001,0.001;0.002,0.002"></label>
+    <button id="create">Create mission</button>
+  </div>
+  <div class="card">
     <button id="refresh">Refresh missions</button>
+    <button id="start">Start selected</button>
+    <button id="pause">Pause selected</button>
+    <button id="resume">Resume selected</button>
+    <button id="abort">Abort selected</button>
     <pre id="missions">No missions loaded.</pre>
   </div>
   <div class="card"><div id="map"></div></div>
@@ -25,18 +35,36 @@
   <script>
     const map = L.map('map').setView([-23.55, -46.63], 12);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap contributors' }).addTo(map);
-    document.querySelector('#refresh').onclick = async () => {
-      const response = await fetch('/missions');
-      const missions = await response.json();
-      document.querySelector('#missions').textContent = JSON.stringify(missions, null, 2);
-      missions.forEach(item => {
-        try {
-          const payload = JSON.parse(item.payload);
-          const points = payload.plan.route.map(p => [p.latitude, p.longitude]);
-          if (points.length) L.polyline(points, {color: '#1264a3'}).addTo(map);
-        } catch (_) { /* Older records may not contain a route payload. */ }
-      });
+    let selectedMission = null;
+    let missionLayers = [];
+    const drone = {id: 'dashboard-drone', name: 'Dashboard Simulator', percent_per_km: 20, reserve_percent: 12, emergency_percent: 8};
+    const base = {latitude: -23.55, longitude: -46.63, altitude_m: 0};
+    async function api(path, method = 'GET', body = undefined) {
+      const response = await fetch(path, {method, headers: {'Content-Type': 'application/json'}, body: body ? JSON.stringify(body) : undefined});
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || 'Request failed');
+      return data;
+    }
+    document.querySelector('#create').onclick = async () => {
+      const route = document.querySelector('#route').value.split(';').map(pair => { const [lat, lon] = pair.split(',').map(Number); return {latitude: base.latitude + lat, longitude: base.longitude + lon, altitude_m: 100}; });
+      selectedMission = (await api('/missions', 'POST', {name: document.querySelector('#name').value, base, route, initial_battery_percent: 90, drone})).id;
+      await refresh();
     };
+    async function refresh() {
+      const missions = await api('/missions');
+      document.querySelector('#missions').textContent = JSON.stringify(missions, null, 2);
+      missionLayers.forEach(layer => map.removeLayer(layer)); missionLayers = [];
+      missions.forEach(item => {
+        try { const payload = JSON.parse(item.payload); const points = payload.plan.route.map(p => [p.latitude, p.longitude]); if (points.length) missionLayers.push(L.polyline(points, {color: '#1264a3'}).addTo(map)); } catch (_) {}
+      });
+    }
+    document.querySelector('#refresh').onclick = async () => {
+      await refresh();
+    };
+    document.querySelector('#start').onclick = () => selectedMission && api(`/missions/${selectedMission}/start`, 'POST');
+    document.querySelector('#pause').onclick = () => selectedMission && api(`/missions/${selectedMission}/pause`, 'POST');
+    document.querySelector('#resume').onclick = () => selectedMission && api(`/missions/${selectedMission}/resume`, 'POST');
+    document.querySelector('#abort').onclick = () => selectedMission && api(`/missions/${selectedMission}/abort`, 'POST');
   </script>
 </body>
 </html>

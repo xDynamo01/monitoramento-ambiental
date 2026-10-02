@@ -1,0 +1,39 @@
+from fastapi.testclient import TestClient
+
+from monitoramento.api import create_app
+
+
+def payload():
+    return {
+        "name": "API mission",
+        "base": {"latitude": 0, "longitude": 0, "altitude_m": 0},
+        "route": [
+            {"latitude": 0, "longitude": 0.001, "altitude_m": 100},
+            {"latitude": 0, "longitude": 0.002, "altitude_m": 100},
+        ],
+        "initial_battery_percent": 90,
+        "drone": {"id": "api-drone", "name": "API Drone", "percent_per_km": 20},
+    }
+
+
+def test_api_mission_lifecycle(tmp_path):
+    client = TestClient(create_app(str(tmp_path / "api.db")))
+    created = client.post("/missions", json=payload())
+    assert created.status_code == 200
+    mission_id = created.json()["id"]
+    assert client.post(f"/missions/{mission_id}/validate").json()["valid"]
+    assert client.post(f"/missions/{mission_id}/start").status_code == 200
+    assert client.get(f"/missions/{mission_id}/telemetry").status_code == 200
+    assert client.post(f"/missions/{mission_id}/pause").status_code == 200
+    assert client.post(f"/missions/{mission_id}/resume").status_code == 200
+    assert client.post(f"/missions/{mission_id}/abort").json()["state"] == "aborted"
+
+
+def test_api_environmental_analysis(tmp_path):
+    client = TestClient(create_app(str(tmp_path / "analysis.db")))
+    response = client.post("/nodes/readings", json={"node_id": "node-1", "latitude": 0, "longitude": 0, "data_type": "vegetation", "measurements": {"vegetation_coverage_percent": 88}, "metadata": {"species": "tapir"}})
+    assert response.status_code == 200
+    result = client.post("/analyses", json={"analysis": "forest_health", "amount_usdc": 1})
+    assert result.status_code == 200
+    assert result.json()["proof"]["network"] == "solana-devnet"
+    assert result.json()["payment"]["status"] == "confirmed"
