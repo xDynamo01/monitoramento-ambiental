@@ -30,12 +30,17 @@ class BatteryModel:
     percent_per_km: float
     reserve_percent: float = 10.0
     emergency_percent: float = 8.0
+    takeoff_percent: float = 3.0
+    landing_percent: float = 3.0
+    wind_margin_percent: float = 5.0
 
     def __post_init__(self) -> None:
         if self.percent_per_km <= 0:
             raise ValueError("percent_per_km deve ser positivo")
         if not 0 <= self.emergency_percent <= self.reserve_percent:
             raise ValueError("a reserva de emergência deve ser menor que a reserva normal")
+        if self.takeoff_percent < 0 or self.landing_percent < 0 or self.wind_margin_percent < 0:
+            raise ValueError("custos de voo não podem ser negativos")
 
 
 @dataclass(frozen=True)
@@ -62,7 +67,7 @@ class IndependentReturnSystem:
 
     def _required_battery_percent(self, distance_to_base_m: float) -> float:
         return_percent = (distance_to_base_m / 1000) * self.battery.percent_per_km
-        return min(100.0, return_percent + self.battery.reserve_percent)
+        return min(100.0, return_percent + self.battery.landing_percent + self.battery.reserve_percent + self.battery.wind_margin_percent)
 
     def required_mission_battery_percent(self) -> float:
         """Estimate battery needed for base → route → base with reserve."""
@@ -70,7 +75,9 @@ class IndependentReturnSystem:
         survey = route_distance_m(self.plan.route)
         inbound = distance_m(self.plan.route[-1], self.plan.base)
         total = outbound + survey + inbound
-        return min(100.0, (total / 1000) * self.battery.percent_per_km + self.battery.reserve_percent)
+        cruise = (total / 1000) * self.battery.percent_per_km
+        phases = self.battery.takeoff_percent + self.battery.landing_percent
+        return min(100.0, cruise + phases + self.battery.reserve_percent + self.battery.wind_margin_percent)
 
     def evaluate(self, telemetry: Telemetry) -> ReturnStatus:
         """Evaluate battery telemetry and latch return once the limit is reached."""

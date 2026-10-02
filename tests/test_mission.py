@@ -53,7 +53,7 @@ def test_return_threshold_uses_farthest_route_point():
     base = Coordinate(0, 0)
     route = recorded_track(base, [Coordinate(0, .001), Coordinate(0, .010)])
     system = IndependentReturnSystem(route, BatteryModel(percent_per_km=20, reserve_percent=12))
-    expected = (route.route[-1].longitude * 111_320 / 1000) * 20 + 12
+    expected = (route.route[-1].longitude * 111_320 / 1000) * 20 + 12 + 3 + 5
     assert abs(system.trigger_percent - expected) < 0.01
     assert system.farthest_point == route.route[-1]
 
@@ -64,6 +64,15 @@ def test_required_battery_covers_outbound_survey_and_inbound():
     system = IndependentReturnSystem(route, BatteryModel(percent_per_km=20, reserve_percent=12))
     required = system.required_mission_battery_percent()
     assert required > system.trigger_percent
+
+
+def test_autonomy_includes_flight_phases_and_wind_margin():
+    base = Coordinate(0, 0)
+    route = recorded_track(base, [Coordinate(0, .001), Coordinate(0, .010)])
+    model = BatteryModel(percent_per_km=20, reserve_percent=12, takeoff_percent=4, landing_percent=4, wind_margin_percent=8)
+    system = IndependentReturnSystem(route, model)
+    assert system.required_mission_battery_percent() > 60
+    assert system.trigger_percent > 40
 
 
 def test_return_is_latched_and_independent_from_mission_state():

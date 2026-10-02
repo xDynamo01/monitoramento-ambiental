@@ -18,6 +18,9 @@ class DroneProfile:
     percent_per_km: float = 20.0
     reserve_percent: float = 12.0
     emergency_percent: float = 8.0
+    takeoff_percent: float = 3.0
+    landing_percent: float = 3.0
+    wind_margin_percent: float = 5.0
     cruise_speed_mps: float | None = None
     default_altitude_m: float | None = None
     has_gps: bool = True
@@ -37,6 +40,9 @@ class DroneProfile:
             percent_per_km=self.percent_per_km,
             reserve_percent=self.reserve_percent,
             emergency_percent=self.emergency_percent,
+            takeoff_percent=self.takeoff_percent,
+            landing_percent=self.landing_percent,
+            wind_margin_percent=self.wind_margin_percent,
         )
 
     def to_dict(self) -> dict[str, Any]:
